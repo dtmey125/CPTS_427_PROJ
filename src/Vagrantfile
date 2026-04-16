@@ -1,0 +1,35 @@
+require 'yaml'
+# Load nodes:
+nodes = YAML.load_file('nodes.yml')
+
+# boot nodes sequentially
+ENV['VAGRANT_NO_PARALLEL'] = 'yes'
+
+# Set up Vagrant API ver 2
+Vagrant.configure("2") do |config|
+  config.vm.box = "generic/ubuntu2204"
+
+  # set up each node in nodes.yml 
+  nodes.each do |node|
+    config.vm.define node["name"] do |machine|
+      machine.vm.hostname = node["name"]
+      machine.vm.network "private_network", ip: node["ip"]
+      machine.vm.provider "libvirt" do |libvirt|
+        libvirt.memory = node["memory"]
+        libvirt.cpus = node["cpus"]
+        libvirt.driver = "kvm"
+      end
+    end
+  end
+
+  # set up provisions
+  
+  # Use Ansible
+  config.vm.define nodes.last["name"] do |last|
+    last.vm.provision "ansible" do |ansible|
+      ansible.limit = "all"
+      ansible.playbook = "playbooks/setup.yml"
+      ansible.groups = { "lab" => nodes.map { |n| n["name"] } }
+    end
+  end
+end

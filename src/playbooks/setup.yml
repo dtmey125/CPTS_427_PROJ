@@ -1,0 +1,10 @@
+- name: Base setup
+  hosts: all
+  become: true
+  tasks:
+    # install iproute, if not already on machine.
+    - name: Install iproute2
+      apt:
+        name: iproute2
+        state: present
+        update_cache: yes
