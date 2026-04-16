@@ -8,3 +8,8 @@
         name: iproute2
         state: present
         update_cache: yes
+
+# Set up Nagios on server
+- import_playbook: nagios_server.yml
+# set up Nagios on client
+- import_playbook: nagios_clients.yml

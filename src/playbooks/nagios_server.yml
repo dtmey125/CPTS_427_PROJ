@@ -1,0 +1,81 @@
+- name: Install Nagios server
+  hosts: nagios_server
+  become: true
+  tasks:
+    - name: Install Nagios
+      ansible.builtin.apt:
+        name:
+          - nagios4
+          - nagios-plugins
+          - nagios-nrpe-plugin
+          - apache2
+        state: present
+        update_cache: true
+
+    - name: Start Nagios service
+      ansible.builtin.systemd:
+        name: nagios4
+        state: started
+        enabled: true
+
+    - name: Start Apache2 service
+      ansible.builtin.systemd:
+        name: apache2
+        state: started
+        enabled: true
+    
+    - name: Add host definitions for other hosts
+      ansible.builtin.copy:
+        dest: /etc/nagios4/conf.d/net_hosts.cfg
+        content: |
+          define host {
+            use                 generic-host
+            host_name           node2
+            address             192.168.50.12
+            max_check_attempts  3
+            check_command       check-host-alive
+          }
+          define host {
+            use                 generic-host
+            host_name           node3
+            address             192.168.50.13
+            max_check_attempts  3
+            check_command       check-host-alive
+          }
+          define host {
+            use                 generic-host
+            host_name           node4
+            address             192.168.50.14
+            max_check_attempts  3
+            check_command       check-host-alive
+          }
+      notify: restart nagios
+
+    # set up apache server for nagios
+    - name: enable nagios4 apache config
+      ansible.builtin.command: a2enconf nagios4-cgi
+      args:
+        creates: /etc/apache2/conf-enabled/nagios4-cgi.conf
+
+    # Enable CGI for apache
+    - name: enable apache CGI loading
+      ansible.builtin.command: a2enmod cgi
+      args:
+        creates: /etc/apache2/mods-enabled/cgi.load
+
+    - name: Add www-data to nagios group
+      ansible.builtin.user:
+        name: www-data
+        groups: nagios
+        append: true
+      notify: restart apache
+    
+  handlers:
+    - name: restart nagios
+      ansible.builtin.systemd:
+        name: nagios4
+        state: restarted
+    - name: restart apache
+      ansible.builtin.systemd:
+        name: apache2
+        state: restarted

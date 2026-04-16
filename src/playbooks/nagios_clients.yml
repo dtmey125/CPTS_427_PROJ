@@ -1,0 +1,32 @@
+- name: Install Nagios client on other nodes
+  hosts: nagios_clients
+  become: true
+  tasks:
+    - name: Install NRPE server
+      ansible.builtin.apt:
+          name:
+              - nagios-nrpe-server
+              - nagios-plugins
+          state: present
+          update_cache: true
+
+    - name: Open connection
+      ansible.builtin.lineinfile:
+        path: /etc/nagios/nrpe.cfg
+        regexp: '^allowed_hosts='
+        # Listen on localhost and for Nagios server
+        line: 'allowed_hosts=127.0.0.1,192.168.50.11'
+      notify: restart nrpe
+
+
+    - name: Start NRPE
+      ansible.builtin.systemd:
+        name: nagios-nrpe-server
+        state: started
+        enabled: true
+
+  handlers:
+    - name: restart nrpe
+      ansible.builtin.systemd:
+        name: nagios-nrpe-server
+        state: restarted

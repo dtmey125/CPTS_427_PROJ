@@ -2,9 +2,6 @@ require 'yaml'
 # Load nodes:
 nodes = YAML.load_file('nodes.yml')
 
-# boot nodes sequentially
-ENV['VAGRANT_NO_PARALLEL'] = 'yes'
-
 # Set up Vagrant API ver 2
 Vagrant.configure("2") do |config|
   config.vm.box = "generic/ubuntu2204"
@@ -13,6 +10,7 @@ Vagrant.configure("2") do |config|
   nodes.each do |node|
     config.vm.define node["name"] do |machine|
       machine.vm.hostname = node["name"]
+      machine.vm.boot_timeout = 1000
       machine.vm.network "private_network", ip: node["ip"]
       machine.vm.provider "libvirt" do |libvirt|
         libvirt.memory = node["memory"]
@@ -29,7 +27,12 @@ Vagrant.configure("2") do |config|
     last.vm.provision "ansible" do |ansible|
       ansible.limit = "all"
       ansible.playbook = "playbooks/setup.yml"
-      ansible.groups = { "lab" => nodes.map { |n| n["name"] } }
+      # create groups in inventory
+      ansible.groups = { 
+        "net" => nodes.map { |n| n["name"] } ,
+        "nagios_server" => [nodes.first["name"]],
+        "nagios_clients" => nodes.drop(1).map { |n| n["name"] }
+      }
     end
   end
 end

@@ -1,0 +1,12 @@
+- name: inject faults
+  hosts: nagios_clients
+  tasks:
+    - name: Add 10% packet loss on eth1
+      ansible.builtin.shell: >
+        tc qdisc add dev eth1 root netem loss 10%
+
+    - name: Add delay
+        tc qdisc add dev eth1 root netem delay 500ms
+
+    - name: remove netem qdisc
+        tc qdisc del eth1 root netem
