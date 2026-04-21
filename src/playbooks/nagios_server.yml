@@ -1,5 +1,12 @@
 - name: Install Nagios server
   hosts: nagios_server
+  vars:
+    nagios_admin_user: nagiosadmin
+    nagios_admin_password: pass
+    nagios_hosts:
+      - { name: node2, address: 192.168.50.12 }
+      - { name: node3, address: 192.168.50.13 }
+      - { name: node4, address: 192.168.50.14 }
   become: true
   tasks:
     - name: Install Nagios
@@ -9,9 +16,29 @@
           - nagios-plugins
           - nagios-nrpe-plugin
           - apache2
+          - python3-passlib
         state: present
         update_cache: true
 
+        
+    - name: Enable auth_digest and CGI modules
+      community.general.apache2_module:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - auth_digest
+        - cgi
+      notify: restart apache
+    
+    - name: Set up Nagios web user
+      ansible.builtin.copy:
+        dest: /etc/nagios4/htdigest.users
+        content: "{{ nagios_admin_user }}:Nagios4:{{ (nagios_admin_user ~ ':Nagios4:' ~ nagios_admin_password) | hash('md5') }}\n"
+        owner: root
+        group: www-data
+        mode: "0640"
+      notify: restart apache
+        
     - name: Start Nagios service
       ansible.builtin.systemd:
         name: nagios4
@@ -25,51 +52,59 @@
         enabled: true
     
     - name: Add host definitions for other hosts
-      ansible.builtin.copy:
+      ansible.builtin.template:
+        src: net_hosts.cfg.j2
         dest: /etc/nagios4/conf.d/net_hosts.cfg
-        content: |
-          define host {
-            use                 generic-host
-            host_name           node2
-            address             192.168.50.12
-            max_check_attempts  3
-            check_command       check-host-alive
-          }
-          define host {
-            use                 generic-host
-            host_name           node3
-            address             192.168.50.13
-            max_check_attempts  3
-            check_command       check-host-alive
-          }
-          define host {
-            use                 generic-host
-            host_name           node4
-            address             192.168.50.14
-            max_check_attempts  3
-            check_command       check-host-alive
-          }
+        owner: root
+        group: root
+        mode: "0644"
       notify: restart nagios
 
-    # set up apache server for nagios
-    - name: enable nagios4 apache config
+    - name: Enable nagios4 CGI configuration
       ansible.builtin.command: a2enconf nagios4-cgi
       args:
         creates: /etc/apache2/conf-enabled/nagios4-cgi.conf
-
-    # Enable CGI for apache
-    - name: enable apache CGI loading
-      ansible.builtin.command: a2enmod cgi
-      args:
-        creates: /etc/apache2/mods-enabled/cgi.load
-
-    - name: Add www-data to nagios group
-      ansible.builtin.user:
-        name: www-data
-        groups: nagios
-        append: true
       notify: restart apache
+
+    # Enable authentication for Nagios
+    - name: enable nagios auth
+      ansible.builtin.lineinfile:
+        path: /etc/nagios4/cgi.cfg
+        regexp: '^use_authentication='
+        line: use_authentication=1
+      notify: restart nagios
     
+    - name: edit nagios apache config
+      ansible.builtin.lineinfile:
+        path: /etc/nagios4/apache2.conf
+        regexp: '{{ item.regexp }}'
+        line: '{{ item.line }}'
+      loop:
+        - { regexp: '^(\s*)Require ip', line: '# Require ip' }
+        - { regexp: '^(\s*)Require all\s+granted', line: '#Require all granted'}
+        - { regexp: '^(\s*)#Require\s+valid-user', line: 'Require valid-user'}
+        - { regexp: '^(\s*)<Files "cmd.cgi">', line: '#<Files "cmd.cgi">'}
+        - { regexp: '^(\s*)</Files>', line: '#</Files>'}
+        - { regexp: '^\s*AuthType', line: 'AuthType Digest' }
+        - { regexp: '^\s*AuthName', line: 'AuthName "Nagios4"' }
+        - { regexp: '^\s*AuthDigestProvider', line: 'AuthDigestProvider file' }
+        - { regexp: '^\s*AuthUserFile', line: 'AuthUserFile /etc/nagios4/htdigest.users' }
+    
+
+    - name: Copy nagios apache2 config to apache2
+      ansible.builtin.file:
+        src: /etc/nagios4/apache2.conf
+        dest: /etc/apache2/sites-available/nagios4.conf
+        state: link
+      notify: restart apache
+
+    - name: Enable nagios4 site
+      ansible.builtin.command: a2ensite nagios4.conf
+      args:
+        creates: /etc/apache2/sites-enabled/nagios4.conf
+      notify: restart apache
+
+
   handlers:
     - name: restart nagios
       ansible.builtin.systemd:
