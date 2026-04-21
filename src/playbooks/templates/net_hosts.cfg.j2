@@ -1,3 +1,10 @@
+define hostgroup {
+  hostgroup_name      clients
+  alias               Clients
+  members             {% for host in nagios_hosts %}{{ host.name }}{{"," if not loop.last else "" }}{% endfor %}
+
+}
+
 {% for host in nagios_hosts %}
 define host {
   use                 generic-host

@@ -1,11 +1,40 @@
 - name: inject faults
   hosts: nagios_clients
+  become: true
   tasks:
-    - name: Add 10% packet loss on eth1
-      ansible.builtin.command: tc qdisc add dev eth1 root netem loss 10%
+    - name: Add packet loss on eth1 and delay
+      ansible.builtin.command: tc qdisc replace dev eth1 root netem loss 60% delay 2000ms
 
-    - name: Add delay
-      ansible.builtin.command: tc qdisc add dev eth1 root netem delay 500ms
+    - name: Pause for 5 minutes
+      ansible.builtin.pause:
+        minutes: 5
 
-    - name: remove netem qdisc
-      ansible.builtin.command: tc qdisc del eth1 root netem
+    - name: Cleanup TC qdiscs
+      ansible.builtin.command: tc qdisc del dev eth1 root netem
+      tags: cleanup
+      ignore_errors: true
+
+    - name: Pause for 1 minute
+      ansible.builtin.pause:
+        minutes: 1
+    
+    - name: Disable networking
+      ansible.builtin.command: ip link set eth1 down
+    
+    - name: Pause for 5 minutes
+      ansible.builtin.pause:
+        minutes: 5
+
+    - name: Enable networking
+      ansible.builtin.service:
+        ansible.builtin.command: ip link set eth1 up
+
+    - name: Disable apache
+      ansible.builtin.service:
+          name: apache2
+          state: stopped
+
+    - name: Pause for 5 minutes
+      ansible.builtin.pause:
+        minutes: 5
+    
