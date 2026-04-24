@@ -1,5 +1,7 @@
 - name: Install Nagios server
   hosts: nagios_server
+  # Normally, the pass should be encrypted with Ansible vault.
+  # I'm including this in plaintext to ease demonstration and replicability.
   vars:
     nagios_admin_user: nagiosadmin
     nagios_admin_password: pass
@@ -60,6 +62,15 @@
         mode: "0644"
       notify: restart nagios
 
+    - name: Add service definitions
+      ansible.builtin.template:
+        src: net_services.cfg.j2
+        dest: /etc/nagios4/conf.d/net_services.cfg
+        owner: root
+        group: root
+        mode: "0644"
+      notify: restart nagios
+
     - name: Enable nagios4 CGI configuration
       ansible.builtin.command: a2enconf nagios4-cgi
       args:
@@ -74,6 +85,9 @@
         line: use_authentication=1
       notify: restart nagios
     
+    # Required for getting authentication to work with Nagios.
+    # A lot of the configurations here were based on this tutorial:
+    # https://discourse.ubuntu.com/t/nagios-core-4-installation-and-configuration/51519
     - name: edit nagios apache config
       ansible.builtin.lineinfile:
         path: /etc/nagios4/apache2.conf
@@ -104,6 +118,12 @@
         creates: /etc/apache2/sites-enabled/nagios4.conf
       notify: restart apache
 
+    - name: Enable nagios4 initial state logging
+      ansible.builtin.lineinfile:
+        path: /etc/nagios4/nagios.cfg
+        regexp: '^log_initial_states='
+        line: 'log_initial_states=1'
+      notify: restart nagios
 
   handlers:
     - name: restart nagios

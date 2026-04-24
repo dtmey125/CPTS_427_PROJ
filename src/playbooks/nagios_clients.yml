@@ -7,10 +7,9 @@
           name:
               - nagios-nrpe-server
               - nagios-plugins
-              - apache2
           state: present
           update_cache: true
-
+    
     - name: Open connection
       ansible.builtin.lineinfile:
         path: /etc/nagios/nrpe.cfg

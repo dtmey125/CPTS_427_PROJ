@@ -2,39 +2,58 @@
   hosts: nagios_clients
   become: true
   tasks:
-    - name: Add packet loss on eth1 and delay
-      ansible.builtin.command: tc qdisc replace dev eth1 root netem loss 60% delay 2000ms
 
-    - name: Pause for 5 minutes
-      ansible.builtin.pause:
-        minutes: 5
+    # Modifies traffic control to add severe packet loss on node 3
+    - name: Add 100% packet loss
+      ansible.builtin.command: tc qdisc replace dev eth1 root netem loss 75%
+      delegate_to: node3
+      tags: [fault, packet_loss]
 
-    - name: Cleanup TC qdiscs
+    - name: Recover packet loss
       ansible.builtin.command: tc qdisc del dev eth1 root netem
-      tags: cleanup
-      ignore_errors: true
+      delegate_to: node3
+      tags: [recover, packet_loss]
 
-    - name: Pause for 1 minute
-      ansible.builtin.pause:
-        minutes: 1
-    
-    - name: Disable networking
-      ansible.builtin.command: ip link set eth1 down
-    
-    - name: Pause for 5 minutes
-      ansible.builtin.pause:
-        minutes: 5
+    # Modifies traffic control to maximize packet loss on node 2
+    - name: Add 100% packet loss
+      ansible.builtin.command: tc qdisc replace dev eth1 root netem loss 100%
+      delegate_to: node2
+      tags: [fault, network_down]
 
-    - name: Enable networking
-      ansible.builtin.service:
-        ansible.builtin.command: ip link set eth1 up
+    - name: Recover packet loss
+      ansible.builtin.command: tc qdisc del dev eth1 root netem
+      delegate_to: node2
+      tags: [recover, network_down]
 
-    - name: Disable apache
-      ansible.builtin.service:
-          name: apache2
-          state: stopped
+    # Modifies traffic control to increase latency
+    - name: Add 5s delay w/ 3s jitter
+      ansible.builtin.command: tc qdisc replace dev eth1 root netem delay 5000ms 3000ms
+      tags: [fault, network_delay]
+      
+    - name: Remove network delay
+      ansible.builtin.command: tc qdisc del dev eth1 root netem
+      tags: [recover, network_delay]
 
-    - name: Pause for 5 minutes
-      ansible.builtin.pause:
-        minutes: 5
-    
+    # Disables SSH service
+    - name: Schedule SSH recovery
+      ansible.builtin.shell: echo "systemctl start ssh" | at now + 2 minutes
+      tags: [fault, ssh_down]
+
+    - name: Stop SSH
+      ansible.builtin.systemd:
+        name: ssh
+        state: stopped
+      tags: [fault, ssh_down]
+
+    # Stop Apache service
+    - name: Stop Apache
+      ansible.builtin.systemd:
+        name: apache2
+        state: stopped
+      tags: [fault, http_down]
+
+    - name: Start Apache
+      ansible.builtin.systemd:
+        name: apache2
+        state: started
+      tags: [recover, http_down]

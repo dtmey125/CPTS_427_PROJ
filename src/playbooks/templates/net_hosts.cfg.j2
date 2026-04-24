@@ -10,7 +10,7 @@ define host {
   use                 generic-host
   host_name           {{ host.name }}
   address             {{ host.address }}
-  max_check_attempts  {{ host.max_check_attempts | default(3) }}
+  max_check_attempts  {{ host.max_check_attempts | default(2) }}
   check_command       check-host-alive
   check_interval      1
   retry_interval      1

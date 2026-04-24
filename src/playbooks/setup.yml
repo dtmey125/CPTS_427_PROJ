@@ -3,11 +3,20 @@
   become: true
   tasks:
     # install iproute, if not already on machine.
-    - name: Install iproute2
+    - name: Install iproute2 and other packages
       apt:
-        name: iproute2
+        name: 
+          - iproute2
+          - apache2
+          - at
         state: present
         update_cache: yes
+
+    - name: Enable at daemon
+      ansible.builtin.systemd:
+        name: atd
+        state: started
+        enabled: true
 
 # Set up Nagios on server
 - import_playbook: nagios_server.yml
