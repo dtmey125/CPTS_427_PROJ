@@ -4,7 +4,7 @@
   tasks:
 
     # Modifies traffic control to add severe packet loss on node 3
-    - name: Add 100% packet loss
+    - name: Add 75% packet loss
       ansible.builtin.command: tc qdisc replace dev eth1 root netem loss 75%
       delegate_to: node3
       tags: [fault, packet_loss]
